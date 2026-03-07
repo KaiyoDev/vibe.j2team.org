@@ -181,13 +181,14 @@ function sampleTextPixels(text: string): Array<{ x: number; y: number }> {
   offCtx.fillText(text, canvasWidth / 2, canvasHeight / 2 - 30)
 
   const imageData = offCtx.getImageData(0, 0, canvasWidth, canvasHeight)
+  const pixels = imageData.data
   const points: Array<{ x: number; y: number }> = []
   const gap = particleDensity.value
 
   for (let y = 0; y < canvasHeight; y += gap) {
     for (let x = 0; x < canvasWidth; x += gap) {
-      const i = (y * canvasWidth + x) * 4
-      if (imageData.data[i + 3] > 128) {
+      const alphaIndex = (y * canvasWidth + x) * 4 + 3
+      if ((pixels[alphaIndex] ?? 0) > 128) {
         points.push({ x, y })
       }
     }
@@ -269,9 +270,9 @@ function drawConstellationLines(c: CanvasRenderingContext2D) {
   const step = len > 5000 ? 3 : len > 2000 ? 2 : 1
 
   for (let i = 0; i < len; i += step) {
-    const p1 = particles[i]
+    const p1 = particles[i]!
     for (let j = i + step; j < len; j += step) {
-      const p2 = particles[j]
+      const p2 = particles[j]!
       const dx = p1.x - p2.x
       const dy = p1.y - p2.y
       const distSq = dx * dx + dy * dy
@@ -298,7 +299,7 @@ function drawCursorGlow(c: CanvasRenderingContext2D) {
 
   // Draw trail
   for (let i = cursorTrail.length - 1; i >= 0; i--) {
-    const t = cursorTrail[i]
+    const t = cursorTrail[i]!
     t.alpha *= 0.88
 
     if (t.alpha < 0.01) {
@@ -430,7 +431,7 @@ function animate() {
 
   // --- Click Bursts ---
   for (let bi = clickBursts.length - 1; bi >= 0; bi--) {
-    const burst = clickBursts[bi]
+    const burst = clickBursts[bi]!
     let allDead = true
 
     for (const bp of burst.particles) {
@@ -495,6 +496,7 @@ function handleTouchMove(e: TouchEvent) {
   if (!canvas) return
   const rect = canvas.getBoundingClientRect()
   const touch = e.touches[0]
+  if (!touch) return
   mouse.x = touch.clientX - rect.left
   mouse.y = touch.clientY - rect.top
 }
@@ -523,6 +525,7 @@ function handleTouchStart(e: TouchEvent) {
   if (!canvas) return
   const rect = canvas.getBoundingClientRect()
   const touch = e.touches[0]
+  if (!touch) return
   const x = touch.clientX - rect.left
   const y = touch.clientY - rect.top
   mouse.x = x
