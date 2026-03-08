@@ -11,26 +11,6 @@
         placeholder="Mood hôm nay của bạn?"
         @input="$emit('update:modelValue', ($event.target as HTMLTextAreaElement).value)"
       />
-      <div class="space-y-2">
-        <p class="font-body text-xs text-text-dim">Chọn emoji:</p>
-        <div class="flex flex-wrap gap-2">
-          <button
-            v-for="emoji in EMOJI_OPTIONS"
-            :key="emoji.value"
-            type="button"
-            class="flex items-center gap-1.5 border px-2 py-1.5 text-sm font-medium transition-all duration-300 cursor-pointer select-none"
-            :class="
-              emoji.value === props.selectedEmoji
-                ? 'border-accent-coral border-2 bg-accent-coral/10 text-accent-coral'
-                : 'border-border-default bg-bg-elevated text-text-primary hover:border-accent-coral'
-            "
-            @click="selectEmoji(emoji.value)"
-          >
-            <span class="text-lg">{{ emoji.value }}</span>
-            <span class="text-[11px] text-text-dim">{{ emoji.label }}</span>
-          </button>
-        </div>
-      </div>
     </div>
     <div class="mt-4 flex flex-col gap-2">
       <button
@@ -70,23 +50,15 @@
 </template>
 
 <script setup lang="ts">
-import { EMOJI_OPTIONS } from '../utils/constants'
-
-const props = defineProps<{
+defineProps<{
   modelValue: string
-  selectedEmoji: string
   isAnalyzing: boolean
   analysisError: string | null
   moodLabel: string
 }>()
 
-const emit = defineEmits<{
+defineEmits<{
   'update:modelValue': [value: string]
-  'update:selectedEmoji': [value: string]
   analyze: []
 }>()
-
-function selectEmoji(value: string): void {
-  emit('update:selectedEmoji', value)
-}
 </script>

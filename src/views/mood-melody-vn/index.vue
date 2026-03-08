@@ -16,8 +16,7 @@
             Mood Melody VN
           </h2>
           <p class="max-w-2xl text-text-secondary text-sm animate-fade-up animate-delay-2">
-            Viết mood, chọn emoji — AI phối giai điệu bolero / v-pop / dân ca và bản đồ sóng cảm
-            xúc.
+            Viết mood — giai điệu theo cảm xúc (bolero / v-pop / dân ca) và bản đồ sóng.
           </p>
         </div>
       </div>
@@ -25,13 +24,17 @@
       <div class="grid gap-5 sm:grid-cols-2 lg:grid-cols-3 pt-2 animate-fade-up animate-delay-3">
         <MoodInput
           v-model="inputText"
-          v-model:selected-emoji="selectedEmoji"
           :is-analyzing="isAnalyzing"
           :analysis-error="analysisError"
           :mood-label="moodLabel"
           @analyze="onAnalyze"
         />
-        <MelodyPlayer :mood="mood" :has-canvas="!!canvasElement" @download="downloadCanvas">
+        <MelodyPlayer
+          :mood="mood"
+          :input-text="inputText"
+          :has-canvas="!!canvasElement"
+          @download="downloadCanvas"
+        >
           <MoodViz
             :mood="mood"
             :get-analyser="synth.getAnalyser"
@@ -49,30 +52,17 @@ import { computed, ref } from 'vue'
 import MoodInput from './components/MoodInput.vue'
 import MelodyPlayer from './components/MelodyPlayer.vue'
 import MoodViz from './components/MoodViz.vue'
-import { EMOJI_OPTIONS, type MoodLabel } from './utils/constants'
+import type { MoodLabel } from './utils/constants'
 import { analyzeVN } from './utils/phobert'
 import { useVnSynth } from './utils/vnSynth'
 
 const inputText = ref('')
-const selectedEmoji = ref('😎')
 const mood = ref<MoodLabel | null>(null)
 const isAnalyzing = ref(false)
 const analysisError = ref<string | null>(null)
 const canvasElement = ref<HTMLCanvasElement | null>(null)
 
 const synth = useVnSynth(mood)
-
-const emojiMoodMap = EMOJI_OPTIONS.reduce<Record<string, MoodLabel>>((acc, o) => {
-  acc[o.value] = o.moodHint
-  return acc
-}, {})
-
-function blendMood(sent: MoodLabel, emo: MoodLabel): MoodLabel {
-  if (sent === emo) return sent
-  if (sent === 'neutral') return emo
-  if (emo === 'neutral') return sent
-  return 'neutral'
-}
 
 const moodLabel = computed(() => {
   if (!mood.value) return ''
@@ -91,11 +81,8 @@ async function onAnalyze(): Promise<void> {
   isAnalyzing.value = true
   try {
     const result = await analyzeVN(text)
-    const baseMood: MoodLabel =
-      result === 'POSITIVE' ? 'positive' : result === 'NEGATIVE' ? 'negative' : 'neutral'
-    const emoMood = emojiMoodMap[selectedEmoji.value] ?? baseMood
-    mood.value = blendMood(baseMood, emoMood)
-    await synth.configureForMood(mood.value)
+    mood.value = result === 'POSITIVE' ? 'positive' : result === 'NEGATIVE' ? 'negative' : 'neutral'
+    await synth.configureForMood(mood.value, text)
   } catch (e) {
     analysisError.value = e instanceof Error ? e.message : 'Lỗi mix giai điệu. Thử lại.'
   } finally {

@@ -1,6 +1,9 @@
 /**
- * VN synth: Tone.js PRO — Bolero (NEG) / V-pop (POS) / Dân ca (NEU)
- * Volume via Tone.getDestination(), progress via Tone.getTransport().seconds
+ * VN synth: Tone.Sampler — 25+ real instruments by mood, scale from text seed.
+ * NEG: nylon-guitar, piano, violin, accordion, marimba (+ extras)
+ * POS: synth-lead, 808-bass, brass, epiano, clap (+ extras)
+ * NEU: flute, dan-bau, sao, trung, kalimba (+ extras)
+ * Text-only input, no emoji. Real piano/sample playback, no synth noise.
  */
 
 import * as Tone from 'tone'
@@ -8,9 +11,132 @@ import { ref, watch, onBeforeUnmount } from 'vue'
 import type { Ref } from 'vue'
 import type { MoodLabel } from './constants'
 
+/** Instrument id → display name. Same sample set (piano) used for all until per-instrument URLs are set. */
+const NEGATIVE_INSTRUMENTS = [
+  'nylon-guitar',
+  'piano',
+  'violin',
+  'accordion',
+  'marimba',
+  'cello',
+  'acoustic-bass',
+  'piano-mellow',
+  'contrabass',
+] as const
+
+const POSITIVE_INSTRUMENTS = [
+  'synth-lead',
+  '808-bass',
+  'brass',
+  'epiano',
+  'clap',
+  'strings',
+  'organ',
+  'pad',
+  'bass-synth',
+] as const
+
+const NEUTRAL_INSTRUMENTS = [
+  'flute',
+  'dan-bau',
+  'sao',
+  'trung',
+  'kalimba',
+  'bamboo',
+  'dan-tranh',
+  't-rung',
+  'sáo',
+] as const
+
+const MOOD_INSTRUMENTS: Record<MoodLabel, readonly string[]> = {
+  negative: NEGATIVE_INSTRUMENTS,
+  positive: POSITIVE_INSTRUMENTS,
+  neutral: NEUTRAL_INSTRUMENTS,
+}
+
+/** Scales as note offsets from root (C). Tone repitches from sampler. */
+const SCALES = [
+  { name: 'minor', notes: [0, 2, 3, 5, 7, 8, 10] },
+  { name: 'major', notes: [0, 2, 4, 5, 7, 9, 11] },
+  { name: 'pentatonic', notes: [0, 3, 5, 7, 10] },
+  { name: 'blues', notes: [0, 3, 5, 6, 7, 10] },
+  { name: 'dorian', notes: [0, 2, 3, 5, 7, 9, 10] },
+] as const
+
+const NOTE_NAMES = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'] as const
+
+function scaleNotes(rootOctave: number, scale: (typeof SCALES)[number]): string[] {
+  return scale.notes.map((semi) => {
+    const note = NOTE_NAMES[semi % 12]
+    const oct = rootOctave + Math.floor(semi / 12)
+    return `${note}${oct}`
+  })
+}
+
+export interface MelodyStyle {
+  name: string
+  instrumentId: string
+  scaleName: string
+  notes: string[]
+  bpm: number
+  duration: string
+}
+
+/** Free piano samples (Tone CDN). Sparse set so Tone repitches. One set for all instruments until per-instrument URLs exist. */
+const SAMPLER_BASE_URL = 'https://tonejs.github.io/audio/casio/'
+const SAMPLER_URLS: Record<string, string> = {
+  A1: 'A1.mp3',
+  A2: 'A2.mp3',
+  A3: 'A3.mp3',
+  A4: 'A4.mp3',
+  A5: 'A5.mp3',
+}
+
+function buildSampler(): Tone.Sampler {
+  return new Tone.Sampler({
+    urls: SAMPLER_URLS,
+    baseUrl: SAMPLER_BASE_URL,
+  }).toDestination()
+}
+
+function textSeed(text: string): number {
+  const normalized = text + Date.now().toString(36) + Math.random()
+  let h = 0
+  for (let i = 0; i < normalized.length; i += 1) {
+    h = (h * 31 + normalized.charCodeAt(i)) | 0
+  }
+  const unsigned = h >>> 0
+  return (unsigned % 1_000_000) / 1_000_000
+}
+
+export function getRandomStyle(mood: MoodLabel, seed: number): MelodyStyle {
+  const instruments = MOOD_INSTRUMENTS[mood]
+  const instIdx = Math.floor((seed * 10000) % instruments.length)
+  const scaleIdx = Math.floor((seed * 9999) % SCALES.length)
+  const instrumentId = instruments[instIdx] ?? instruments[0]!
+  const scale = SCALES[scaleIdx] ?? SCALES[0]!
+  const rootOctave = mood === 'negative' ? 3 : mood === 'positive' ? 4 : 4
+  const notes = scaleNotes(rootOctave, scale)
+  const bpm =
+    mood === 'negative'
+      ? 56 + (instIdx % 12)
+      : mood === 'positive'
+        ? 118 + (instIdx % 14)
+        : 72 + (instIdx % 10)
+  const duration = mood === 'negative' ? '4n' : mood === 'positive' ? '8n' : '2n'
+  return {
+    name: `${instrumentId} (${scale.name})`,
+    instrumentId,
+    scaleName: scale.name,
+    notes,
+    bpm,
+    duration,
+  }
+}
+
 let analyserNode: AnalyserNode | null = null
 let currentPart: Tone.Part | null = null
-let currentSynth: Tone.Synth | Tone.FMSynth | null = null
+let currentSampler: Tone.Sampler | null = null
 
 function getAnalyserNode(): AnalyserNode | null {
   if (analyserNode) return analyserNode
@@ -27,92 +153,50 @@ function getAnalyserNode(): AnalyserNode | null {
 function disposeCurrent(): void {
   try {
     currentPart?.dispose()
-    currentSynth?.dispose()
+    currentSampler?.dispose()
   } catch {
     /* ignore */
   }
   currentPart = null
-  currentSynth = null
+  currentSampler = null
+}
+
+function scheduleStyle(style: MelodyStyle, analyser: AnalyserNode | null): void {
+  Tone.getTransport().bpm.value = style.bpm
+  const events = style.notes.map((n, i) => [i * 0.5, n] as [number, string])
+
+  const sampler = buildSampler()
+  if (analyser) sampler.connect(analyser)
+  currentSampler = sampler
+
+  const part = new Tone.Part((time, note) => {
+    sampler.triggerAttackRelease(note as string, style.duration, time, 0.6)
+  }, events)
+  part.loop = true
+  part.loopEnd = '2m'
+  part.start(0)
+  currentPart = part
 }
 
 /**
- * Bolero NEG: A3-G3-F3-E3 sawtooth warm
- * Vpop POS: C5-E5-G5-C6 square drop
- * Dan ca NEU: G4-A4-B4 fm flute
+ * Generate and play melody from text + mood. Instrument + scale from text seed.
  */
-export function playMoodMelody(mood: MoodLabel): void {
+export function generateMoodMelody(text: string, mood: MoodLabel): void {
   Tone.getTransport().stop()
   Tone.getTransport().cancel()
   disposeCurrent()
 
-  const dest = Tone.getDestination()
+  const seed = textSeed(text)
+  const style = getRandomStyle(mood, seed)
+  console.log(`[synth] "${text}" (${text.length}chars) → ${style.name} seed ${seed.toFixed(3)}`)
+
   const analyser = getAnalyserNode()
-
-  if (mood === 'negative') {
-    Tone.getTransport().bpm.value = 60
-    const synth = new Tone.Synth({
-      oscillator: { type: 'sawtooth' },
-      envelope: { attack: 0.02, decay: 0.2, sustain: 0.6, release: 0.4 },
-    })
-    const filter = new Tone.Filter(800, 'lowpass')
-    synth.chain(filter, dest)
-    if (analyser) synth.connect(analyser)
-    currentSynth = synth
-    const notes = ['A3', 'G3', 'F3', 'E3']
-    const part = new Tone.Part(
-      (time, note) => {
-        synth.triggerAttackRelease(note as string, '4n', time, 0.6)
-      },
-      notes.map((n, i) => [i * 0.5, n]) as [number, string][],
-    )
-    part.loop = true
-    part.loopEnd = '2m'
-    part.start(0)
-    currentPart = part
-  } else if (mood === 'positive') {
-    Tone.getTransport().bpm.value = 120
-    const synth = new Tone.Synth({
-      oscillator: { type: 'square' },
-      envelope: { attack: 0.01, decay: 0.1, sustain: 0.4, release: 0.3 },
-    })
-    synth.toDestination()
-    if (analyser) synth.connect(analyser)
-    currentSynth = synth
-    const notes = ['C5', 'E5', 'G5', 'C6']
-    const part = new Tone.Part(
-      (time, note) => {
-        synth.triggerAttackRelease(note as string, '8n', time, 0.5)
-      },
-      notes.map((n, i) => [i * 0.25, n]) as [number, string][],
-    )
-    part.loop = true
-    part.loopEnd = '2m'
-    part.start(0)
-    currentPart = part
-  } else {
-    Tone.getTransport().bpm.value = 80
-    const synth = new Tone.FMSynth({
-      harmonicity: 3,
-      modulationIndex: 2,
-      envelope: { attack: 0.05, decay: 0.2, sustain: 0.7, release: 0.5 },
-    })
-    synth.toDestination()
-    if (analyser) synth.connect(analyser)
-    currentSynth = synth
-    const notes = ['G4', 'A4', 'B4']
-    const part = new Tone.Part(
-      (time, note) => {
-        synth.triggerAttackRelease(note as string, '2n', time, 0.5)
-      },
-      notes.map((n, i) => [i * 0.6, n]) as [number, string][],
-    )
-    part.loop = true
-    part.loopEnd = '2m'
-    part.start(0)
-    currentPart = part
-  }
-
+  scheduleStyle(style, analyser)
   Tone.getTransport().start()
+}
+
+export function playMoodMelody(mood: MoodLabel): void {
+  generateMoodMelody('', mood)
 }
 
 export function stopMoodMelody(): void {
@@ -154,9 +238,6 @@ export function cleanup(): void {
   analyserNode = null
 }
 
-/**
- * Composable: trạng thái + hành động cho MelodyPlayer.
- */
 let _userHasStartedAudio = false
 
 export function setVolumeOnlyAfterUserGesture(linear0to1: number): void {
@@ -213,10 +294,14 @@ export function useVnSynth(mood: Ref<MoodLabel | null>) {
     volume,
     progress,
     toggle,
-    configureForMood: async (m: MoodLabel) => {
+    configureForMood: async (m: MoodLabel, text?: string) => {
       if (isTransportRunning() && mood.value) {
         stopMoodMelody()
-        playMoodMelody(m)
+        if (text !== undefined && text !== '') {
+          generateMoodMelody(text, m)
+        } else {
+          playMoodMelody(m)
+        }
       }
     },
     getAnalyser: () => getAnalyserNode(),

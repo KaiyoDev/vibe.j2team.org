@@ -97,7 +97,8 @@
 
     <slot />
     <p class="mt-3 font-body text-[11px] text-text-dim">
-      NEG bolero A3-G3-F3-E3 sawtooth · POS v-pop C5-E5-G5-C6 square · NEU dân ca G4-A4-B4 FM flute.
+      Tone.Sampler — NEG guitar/piano/violin · POS synth/808/brass · NEU flute/dan-bau/sáo. Scale +
+      instrument theo text.
     </p>
   </section>
 </template>
@@ -107,7 +108,7 @@ import * as Tone from 'tone'
 import { ref, onBeforeUnmount } from 'vue'
 import type { MoodLabel } from '../utils/constants'
 import {
-  playMoodMelody,
+  generateMoodMelody,
   stopMoodMelody,
   setDestinationVolume,
   setVolumeOnlyAfterUserGesture,
@@ -117,6 +118,7 @@ import {
 
 const props = defineProps<{
   mood: MoodLabel | null
+  inputText: string
   hasCanvas: boolean
 }>()
 
@@ -136,7 +138,7 @@ async function togglePlay(): Promise<void> {
     await Tone.start()
     markUserHasStartedAudio()
     setDestinationVolume((volume.value / 100) * 0.35)
-    playMoodMelody(props.mood)
+    generateMoodMelody(props.inputText || ' ', props.mood)
     isPlaying.value = true
     progressInterval = setInterval(() => {
       progress.value = Math.min(getTransportSeconds(), progressMax)
