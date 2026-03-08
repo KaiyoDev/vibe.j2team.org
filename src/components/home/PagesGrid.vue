@@ -5,28 +5,39 @@ import { pages } from '@/data/pages-loader'
 import { padIndex } from '@/data/homepage'
 import { categories } from '@/data/categories'
 
-const observer = new IntersectionObserver(
-  (entries) => {
-    for (const entry of entries) {
-      if (entry.isIntersecting) {
-        ;(entry.target as HTMLElement).classList.add('animate-fade-up')
-        observer.unobserve(entry.target)
-      }
-    }
-  },
-  { threshold: 0.1 },
-)
+let observer: IntersectionObserver | null = null
+
+function getObserver(): IntersectionObserver {
+  if (!observer) {
+    observer = new IntersectionObserver(
+      (entries) => {
+        for (const entry of entries) {
+          if (entry.isIntersecting) {
+            ;(entry.target as HTMLElement).classList.add('animate-fade-up')
+            observer!.unobserve(entry.target)
+          }
+        }
+      },
+      { threshold: 0.1 },
+    )
+  }
+  return observer
+}
 
 const vAnimate: Directive<HTMLElement, string | undefined> = {
   mounted(el, binding) {
+    if (typeof IntersectionObserver === 'undefined') {
+      el.classList.add('animate-fade-up')
+      return
+    }
     if (binding.value) {
       el.style.animationDelay = binding.value
     }
     el.style.opacity = '0'
-    observer.observe(el)
+    getObserver().observe(el)
   },
   unmounted(el) {
-    observer.unobserve(el)
+    observer?.unobserve(el)
   },
 }
 
