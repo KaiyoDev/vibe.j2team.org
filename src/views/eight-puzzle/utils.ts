@@ -56,6 +56,7 @@ export function moveTile(board: TileValue[], tileIndex: number, size: PuzzleSize
 
   const next = [...board]
   const tile = next[tileIndex]
+  if (tile === undefined) return board
   next[tileIndex] = null
   next[emptyIndex] = tile
   return next
