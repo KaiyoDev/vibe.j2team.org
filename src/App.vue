@@ -4,8 +4,11 @@ import { useHead, useSeoMeta } from '@unhead/vue'
 import { computed } from 'vue'
 import ErrorBoundary from '@/components/ErrorBoundary.vue'
 import EdgeToolbar from '@/components/EdgeToolbar.vue'
+import AppNavbar from '@/components/AppNavbar.vue'
+import BackToTop from '@/components/BackToTop.vue'
 
 const route = useRoute()
+const isCorePage = computed(() => !route.meta.pagePath)
 
 const SITE_NAME = 'vibe.j2team.org'
 const SITE_URL = 'https://vibe.j2team.org'
@@ -37,6 +40,7 @@ useSeoMeta({
 </script>
 
 <template>
+  <AppNavbar v-if="isCorePage" />
   <RouterView v-slot="{ Component }">
     <ErrorBoundary>
       <component :is="Component" />
@@ -46,4 +50,5 @@ useSeoMeta({
     v-if="route.meta.pagePath && route.meta.showToolbar !== false"
     :page-path="route.meta.pagePath as string"
   />
+  <BackToTop v-if="isCorePage" />
 </template>

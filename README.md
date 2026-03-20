@@ -110,3 +110,13 @@ src/
 </a>
 
 Made with [contrib.rocks](https://contrib.rocks).
+
+## Star History
+
+<a href="https://www.star-history.com/?repos=J2TEAM%2Fvibe.j2team.org&type=date&legend=bottom-right">
+ <picture>
+   <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/image?repos=J2TEAM/vibe.j2team.org&type=date&theme=dark&legend=top-left" />
+   <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/image?repos=J2TEAM/vibe.j2team.org&type=date&legend=top-left" />
+   <img alt="Star History Chart" src="https://api.star-history.com/image?repos=J2TEAM/vibe.j2team.org&type=date&legend=top-left" />
+ </picture>
+</a>

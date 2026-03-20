@@ -1,10 +1,13 @@
 <script setup lang="ts">
 import { ref, computed } from 'vue'
+import { storeToRefs } from 'pinia'
 import { useRouter } from 'vue-router'
 import { useIntersectionObserver } from '@vueuse/core'
 import { Icon } from '@iconify/vue'
-import { pages } from '@/data/pages-loader'
+import { usePagesStore } from '@/stores/usePagesStore'
 import { categories, type CategoryId } from '@/data/categories'
+import { useFavoritesStore } from '@/stores/useFavoritesStore'
+import { useRecentlyViewedStore } from '@/stores/useRecentlyViewedStore'
 import PostCard from './components/PostCard.vue'
 import PostSkeleton from './components/PostSkeleton.vue'
 import GiscusComments from './components/GiscusComments.vue'
@@ -12,16 +15,41 @@ import GiscusComments from './components/GiscusComments.vue'
 const router = useRouter()
 const PAGE_SIZE = 10
 
+// ============ Favorites ============
+const favoritesStore = useFavoritesStore()
+const { favoritePaths } = storeToRefs(favoritesStore)
+const { toggleFavorite, isFavorite } = favoritesStore
+
+// ============ Recently Viewed ============
+const recentlyViewedStore = useRecentlyViewedStore()
+const { recentEntries } = storeToRefs(recentlyViewedStore)
+const { addVisit } = recentlyViewedStore
+
+// ============ Tabs ============
+type TabId = 'all' | 'recent' | 'favorites'
+const activeTab = ref<TabId>('all')
+
+const recentPaths = computed(() => new Set(recentEntries.value.map((e) => e.path)))
+
 // Filter state
 const searchQuery = ref('')
 const selectedCategory = ref<CategoryId | ''>('')
 
 // Get all pages (no hidden)
-const allPages = computed(() => pages.filter((p) => !p.hidden))
+const pagesStore = usePagesStore()
+
+const allPages = computed(() => pagesStore.pages.filter((p) => !p.hidden))
 
 // Filtered pages
 const filteredPages = computed(() => {
   let result = allPages.value
+
+  // Filter by tab
+  if (activeTab.value === 'recent') {
+    result = result.filter((p) => recentPaths.value.has(p.path))
+  } else if (activeTab.value === 'favorites') {
+    result = result.filter((p) => favoritePaths.value.includes(p.path))
+  }
 
   // Filter by category
   if (selectedCategory.value) {
@@ -74,6 +102,11 @@ function handleFilterChange() {
   visibleCount.value = PAGE_SIZE
 }
 
+// Reset when tab changes
+function handleTabChange() {
+  visibleCount.value = PAGE_SIZE
+}
+
 function goHome() {
   router.push('/')
 }
@@ -90,6 +123,18 @@ function openComments(path: string) {
 function closeComments() {
   showComments.value = false
 }
+
+function handleToggleFavorite(path: string) {
+  toggleFavorite(path)
+}
+
+function handleViewPost(path: string) {
+  addVisit(path)
+}
+
+function handleRemoveFromHistory(path: string) {
+  recentEntries.value = recentEntries.value.filter((e) => e.path !== path)
+}
 </script>
 
 <template>
@@ -100,8 +145,8 @@ function closeComments() {
         <!-- Top row: Home + Title -->
         <div class="flex items-center justify-between">
           <h1 class="font-display font-bold text-xl text-text-primary flex items-center gap-2">
-            <Icon icon="lucide:book-open" class="w-6 h-6 text-accent-coral" />
-            VibeBook
+            <Icon icon="lucide:book-open" class="w-6 h-6 text-accent-coral shrink-0" />
+            <span class="translate-y-px">VibeBook</span>
           </h1>
           <button
             class="flex items-center justify-center w-9 h-9 rounded border border-border-default hover:bg-bg-deep hover:border-accent-coral transition-colors"
@@ -109,6 +154,46 @@ function closeComments() {
             @click="goHome"
           >
             <Icon icon="lucide:home" class="w-5 h-5 text-text-secondary" />
+          </button>
+        </div>
+
+        <!-- Tabs -->
+        <div class="flex gap-1 bg-bg-deep p-1">
+          <button
+            class="flex-1 flex items-center justify-center gap-1.5 px-2 py-1.5 rounded text-sm font-medium transition-colors"
+            :class="
+              activeTab === 'all'
+                ? 'bg-bg-surface text-text-primary shadow'
+                : 'text-text-secondary hover:text-text-primary'
+            "
+            @click="((activeTab = 'all'), handleTabChange())"
+          >
+            <Icon icon="lucide:layout-grid" class="w-4 h-4 shrink-0" />
+            <span class="translate-y-px">Tất cả</span>
+          </button>
+          <button
+            class="flex-1 flex items-center justify-center gap-1.5 px-2 py-1.5 rounded text-sm font-medium transition-colors"
+            :class="
+              activeTab === 'recent'
+                ? 'bg-bg-surface text-text-primary shadow'
+                : 'text-text-secondary hover:text-text-primary'
+            "
+            @click="((activeTab = 'recent'), handleTabChange())"
+          >
+            <Icon icon="lucide:clock" class="w-4 h-4 shrink-0" />
+            <span class="translate-y-px">Đã xem</span>
+          </button>
+          <button
+            class="flex-1 flex items-center justify-center gap-1.5 px-2 py-1.5 rounded text-sm font-medium transition-colors"
+            :class="
+              activeTab === 'favorites'
+                ? 'bg-bg-surface text-text-primary shadow'
+                : 'text-text-secondary hover:text-text-primary'
+            "
+            @click="((activeTab = 'favorites'), handleTabChange())"
+          >
+            <Icon icon="lucide:heart" class="w-4 h-4 shrink-0" />
+            <span class="translate-y-px">Đã lưu</span>
           </button>
         </div>
 
@@ -124,7 +209,7 @@ function closeComments() {
               v-model="searchQuery"
               type="text"
               placeholder="Tìm kiếm..."
-              class="w-full pl-9 pr-3 py-2 bg-bg-deep border border-border-default rounded text-sm text-text-primary placeholder-text-dim focus:outline-none focus:border-accent-coral"
+              class="w-full pl-9 pr-3 py-2 bg-bg-deep border border-border-default text-sm text-text-primary placeholder-text-dim focus:outline-none focus:border-accent-coral"
               @input="handleFilterChange"
             />
           </div>
@@ -133,7 +218,7 @@ function closeComments() {
           <div class="relative flex-shrink-0">
             <select
               v-model="selectedCategory"
-              class="w-full px-3 py-2 pr-8 bg-bg-deep border border-border-default rounded text-sm text-text-primary focus:outline-none focus:border-accent-coral cursor-pointer appearance-none"
+              class="w-full px-3 py-2 pr-8 bg-bg-deep border border-border-default text-sm text-text-primary focus:outline-none focus:border-accent-coral cursor-pointer appearance-none"
               @change="handleFilterChange"
             >
               <option value="">Tất cả</option>
@@ -163,7 +248,12 @@ function closeComments() {
           v-for="page in visiblePosts"
           :key="page.path"
           :page="page"
+          :is-favorite="isFavorite(page.path)"
+          :is-in-recent-tab="activeTab === 'recent'"
           @open-comments="openComments(page.path)"
+          @view="handleViewPost(page.path)"
+          @toggle-favorite="handleToggleFavorite(page.path)"
+          @remove-from-history="handleRemoveFromHistory(page.path)"
         />
 
         <!-- Loading skeleton -->

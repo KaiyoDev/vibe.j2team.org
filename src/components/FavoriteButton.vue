@@ -2,7 +2,7 @@
 import { computed } from 'vue'
 import { Icon } from '@iconify/vue'
 import { useTimeoutFn } from '@vueuse/core'
-import { useFavorites } from '@/composables/useFavorites'
+import { useFavoritesStore } from '@/stores/useFavoritesStore'
 
 const props = defineProps<{
   path: string
@@ -10,7 +10,7 @@ const props = defineProps<{
   alwaysVisible?: boolean
 }>()
 
-const { toggleFavorite, isFavorite } = useFavorites()
+const { toggleFavorite, isFavorite } = useFavoritesStore()
 
 const favorited = computed(() => isFavorite(props.path))
 
