@@ -162,8 +162,9 @@ const floatingPixels: FloatingPixel[] = [
 const logoUrl = '/shared/web-logo.svg'
 const authorName = 'KaiyoDang'
 const authorUrl = 'https://www.facebook.com/kaiyo.dang'
+const defaultPreset = presets[0]!
 
-const activePresetId = ref(presets[0].id)
+const activePresetId = ref(defaultPreset.id)
 const board = ref<BoardCell[][]>([])
 const region = ref<Set<string>>(new Set())
 const moves = ref(0)
@@ -177,8 +178,8 @@ const completedPresets = useLocalStorage<Record<string, PersistedClearRecord>>(
 )
 const burstRegionKeys = ref<Set<string>>(new Set())
 
-const selectedPreset = computed(
-  () => presets.find((preset) => preset.id === activePresetId.value) ?? presets[0],
+const selectedPreset = computed<PuzzlePreset>(
+  () => presets.find((preset) => preset.id === activePresetId.value) ?? defaultPreset,
 )
 
 const { pause: pauseTimer, resume: resumeTimer } = useIntervalFn(
@@ -189,12 +190,7 @@ const { pause: pauseTimer, resume: resumeTimer } = useIntervalFn(
   { immediate: false },
 )
 
-const totalPlayableTiles = computed(() =>
-  board.value.reduce(
-    (count, row) => count + row.reduce((acc, cell) => acc + (cell === null ? 0 : 1), 0),
-    0,
-  ),
-)
+const totalPlayableTiles = computed(() => countPlayableTiles(board.value))
 
 const currentRegionColor = computed<TileColor | null>(() => {
   const start = getStartCoord(board.value)
@@ -249,8 +245,16 @@ function coordKey(coord: Coord): string {
 }
 
 function parseCoord(key: string): Coord {
-  const [row, col] = key.split(',').map(Number)
+  const [row = 0, col = 0] = key.split(',').map(Number)
   return { row, col }
+}
+
+function countPlayableTiles(grid: BoardCell[][]): number {
+  return grid.reduce(
+    (count, row) =>
+      count + row.reduce<number>((rowCount, cell) => rowCount + (cell === null ? 0 : 1), 0),
+    0,
+  )
 }
 
 function getStartCoord(grid: BoardCell[][]): Coord | null {
@@ -682,13 +686,7 @@ resetGame()
                   </span>
                 </div>
                 <p class="mt-1 text-xs text-text-secondary">
-                  {{
-                    preset.board.reduce(
-                      (count, row) =>
-                        count + row.reduce((acc, cell) => acc + (cell === null ? 0 : 1), 0),
-                      0,
-                    )
-                  }}
+                  {{ countPlayableTiles(preset.board) }}
                   ô hoạt động
                 </p>
                 <p v-if="completedPresets[preset.id]" class="mt-1 text-[11px] text-accent-amber/80">
@@ -815,13 +813,7 @@ resetGame()
                   </span>
                 </div>
                 <p class="mt-1 text-xs text-text-secondary">
-                  {{
-                    preset.board.reduce(
-                      (count, row) =>
-                        count + row.reduce((acc, cell) => acc + (cell === null ? 0 : 1), 0),
-                      0,
-                    )
-                  }}
+                  {{ countPlayableTiles(preset.board) }}
                   ô hoạt động
                 </p>
                 <p v-if="completedPresets[preset.id]" class="mt-1 text-[11px] text-accent-amber/80">
